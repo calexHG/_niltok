@@ -714,6 +714,50 @@ class TypedHandlerTest : LightCodeInsightTestCase() {
         )
     }
 
+    fun testNewLineInLambdaInExpressionAndComment() {
+        doCharTypeTest(
+                '\n',
+                """
+                |fun test() {
+                |    run(
+                |        /* :) */ {<caret>}
+                |    )
+                |}
+                """,
+                """
+                |fun test() {
+                |    run(
+                |        /* :) */ {
+                |            <caret>
+                |        }
+                |    )
+                |}
+                """
+        )
+    }
+
+    fun testNewLineInLambdaInExpression() {
+        doCharTypeTest(
+                '\n',
+                """
+                |fun test() {
+                |    run(
+                |        {<caret>}
+                |    )
+                |}
+                """,
+                """
+                |fun test() {
+                |    run(
+                |        {
+                |            <caret>
+                |        }
+                |    )
+                |}
+                """
+        )
+    }
+
     fun testAutoIndentInWhenClause() {
         doCharTypeTest(
             '\n',
@@ -734,7 +778,6 @@ class TypedHandlerTest : LightCodeInsightTestCase() {
             """
         )
     }
-
 
     fun testMoveThroughGT() {
         LightPlatformCodeInsightTestCase.configureFromFileText("a.kt", "val a: List<Set<Int<caret>>>")

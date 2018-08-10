@@ -17,3 +17,7 @@ projectTest {
 }
 
 val generateTests by generator("org.jetbrains.kotlin.generators.tests.GenerateCompilerSpecTestsKt")
+
+val printSpecTestsStatistic by smartJavaExec {
+    main = "org.jetbrains.kotlin.tasks.PrintSpecTestsStatisticKt"
+}

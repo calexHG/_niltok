@@ -63,9 +63,8 @@ class SpecifyExplicitLambdaSignatureIntention : SelfTargetingOffsetIndependentIn
     companion object {
 
         fun KtFunctionLiteral.setParameterListIfAny(psiFactory: KtPsiFactory, newParameterList: KtParameterList?) {
-            if (newParameterList == null) return
             val oldParameterList = valueParameterList
-            if (oldParameterList != null) {
+            if (oldParameterList != null && newParameterList != null) {
                 oldParameterList.replace(newParameterList)
             } else {
                 val openBraceElement = lBrace
@@ -73,7 +72,9 @@ class SpecifyExplicitLambdaSignatureIntention : SelfTargetingOffsetIndependentIn
                 val addNewline = nextSibling is PsiWhiteSpace && nextSibling.text?.contains("\n") ?: false
                 val (whitespace, arrow) = psiFactory.createWhitespaceAndArrow()
                 addRangeAfter(whitespace, arrow, openBraceElement)
-                addAfter(newParameterList, openBraceElement)
+                if (newParameterList != null) {
+                    addAfter(newParameterList, openBraceElement)
+                }
                 if (addNewline) {
                     addAfter(psiFactory.createNewLine(), openBraceElement)
                 }

@@ -31,12 +31,12 @@ class ExampleSubplugin : KotlinGradleSubplugin<AbstractCompile> {
     }
 
     override fun apply(
-            project: Project, 
-            kotlinCompile: AbstractCompile, 
-            javaCompile: AbstractCompile, 
-            variantData: Any?,
-            androidProjectHandler: Any?,
-            javaSourceSet: SourceSet?
+        project: Project,
+        kotlinCompile: AbstractCompile,
+        javaCompile: AbstractCompile?,
+        variantData: Any?,
+        androidProjectHandler: Any?,
+        javaSourceSet: SourceSet?
     ): List<SubpluginOption> {
         println("ExampleSubplugin loaded")
         return listOf(SubpluginOption("exampleKey", "exampleValue"))

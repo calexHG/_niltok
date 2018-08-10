@@ -87,7 +87,7 @@ open class Kotlin2JsPluginWrapper @Inject internal constructor(fileResolver: Fil
 fun Project.getKotlinPluginVersion(): String? =
     plugins.asSequence().mapNotNull { (it as? KotlinBasePluginWrapper)?.kotlinPluginVersion }.firstOrNull()
 
-private fun Any.loadKotlinVersionFromResource(log: Logger): String {
+fun Plugin<*>.loadKotlinVersionFromResource(log: Logger): String {
     log.kotlinDebug("Loading version information")
     val props = Properties()
     val propFileName = "project.properties"

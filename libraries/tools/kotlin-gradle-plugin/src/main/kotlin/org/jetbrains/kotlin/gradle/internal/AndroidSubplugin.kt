@@ -30,7 +30,6 @@ import org.gradle.api.tasks.compile.AbstractCompile
 import org.gradle.tooling.provider.model.ToolingModelBuilderRegistry
 import org.jetbrains.kotlin.gradle.model.builder.KotlinAndroidExtensionModelBuilder
 import org.jetbrains.kotlin.gradle.plugin.*
-import org.jetbrains.kotlin.gradle.plugin.android.AndroidGradleWrapper
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.w3c.dom.Document
 import java.io.File
@@ -90,12 +89,12 @@ class AndroidSubplugin : KotlinGradleSubplugin<KotlinCompile> {
     }
 
     override fun apply(
-            project: Project,
-            kotlinCompile: KotlinCompile,
-            javaCompile: AbstractCompile,
-            variantData: Any?,
-            androidProjectHandler: Any?,
-            javaSourceSet: SourceSet?
+        project: Project,
+        kotlinCompile: KotlinCompile,
+        javaCompile: AbstractCompile?,
+        variantData: Any?,
+        androidProjectHandler: Any?,
+        javaSourceSet: SourceSet?
     ): List<SubpluginOption> {
         val androidExtension = project.extensions.getByName("android") as? BaseExtension ?: return emptyList()
         val androidExtensionsExtension = project.extensions.getByType(AndroidExtensionsExtension::class.java)

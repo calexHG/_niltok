@@ -18,9 +18,6 @@ package org.jetbrains.kotlin.samWithReceiver.gradle
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.internal.AbstractTask
-import org.gradle.api.artifacts.ResolvedArtifact
-import org.gradle.api.internal.ConventionTask
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.compile.AbstractCompile
 import org.gradle.tooling.provider.model.ToolingModelBuilderRegistry
@@ -53,12 +50,12 @@ class SamWithReceiverKotlinGradleSubplugin : KotlinGradleSubplugin<AbstractCompi
     override fun isApplicable(project: Project, task: AbstractCompile) = SamWithReceiverGradleSubplugin.isEnabled(project)
 
     override fun apply(
-            project: Project,
-            kotlinCompile: AbstractCompile,
-            javaCompile: AbstractCompile,
-            variantData: Any?,
-            androidProjectHandler: Any?,
-            javaSourceSet: SourceSet?
+        project: Project,
+        kotlinCompile: AbstractCompile,
+        javaCompile: AbstractCompile?,
+        variantData: Any?,
+        androidProjectHandler: Any?,
+        javaSourceSet: SourceSet?
     ): List<SubpluginOption> {
         if (!SamWithReceiverGradleSubplugin.isEnabled(project)) return emptyList()
 

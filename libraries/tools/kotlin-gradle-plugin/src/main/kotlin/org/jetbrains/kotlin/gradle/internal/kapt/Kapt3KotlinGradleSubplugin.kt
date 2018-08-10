@@ -171,12 +171,12 @@ class Kapt3KotlinGradleSubplugin : KotlinGradleSubplugin<KotlinCompile> {
     }
 
     override fun apply(
-            project: Project,
-            kotlinCompile: KotlinCompile,
-            javaCompile: AbstractCompile,
-            variantData: Any?,
-            androidProjectHandler: Any?,
-            javaSourceSet: SourceSet?
+        project: Project,
+        kotlinCompile: KotlinCompile,
+        javaCompile: AbstractCompile?,
+        variantData: Any?,
+        androidProjectHandler: Any?,
+        javaSourceSet: SourceSet?
     ): List<SubpluginOption> {
         assert((variantData != null) xor (javaSourceSet != null))
 
@@ -211,7 +211,7 @@ class Kapt3KotlinGradleSubplugin : KotlinGradleSubplugin<KotlinCompile> {
         val nonEmptyKaptConfigurations = kaptConfigurations.filter { it.dependencies.isNotEmpty() }
 
         val context = Kapt3SubpluginContext(
-            project, kotlinCompile, javaCompile,
+            project, kotlinCompile, requireNotNull(javaCompile) { "A valid java compile task is needed to run kapt" },
             kaptVariantData, sourceSetName, javaSourceSet, kaptExtension, nonEmptyKaptConfigurations
         )
 

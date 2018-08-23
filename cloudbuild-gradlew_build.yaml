@@ -1,0 +1,79 @@
+---
+steps:
+
+  - name: alpine
+    entrypoint: '/usr/bin/id'
+
+  - name: alpine
+    entrypoint: '/bin/ls'
+    args: ['-la']
+    dir: /workspace
+
+  - name: debian:stable-slim
+    args:
+      - chown
+      - '--from=root:root'
+      - '1000:1000'
+      - --recursive
+      - .
+    dir: /workspace
+
+  # - name: 'gcr.io/cloud-builders/docker'
+  #   args:
+  #     - build
+  #     - .
+  #     - -t
+  #     - gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9
+  #     - --cache-from
+  #     - gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9
+  #   dir: '/workspace/build-environment/gradle_w_zulu_jdk_6_7_8_9'
+
+  - name: 'gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9'
+    entrypoint: '/bin/ls'
+    args: ['-la']
+    dir: /workspace
+
+  - name: 'gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9'
+    entrypoint: '/usr/bin/env'
+    dir: /workspace
+
+  - name: 'gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9'
+    entrypoint: '/workspace/gradlew'
+    args:
+      # Avoid "org.gradle.api.GradleException: Error resolving plugin [id: 'org.gradle.kotlin.kotlin-dsl', version: '0.16.2']"
+      # caused by "java.net.SocketTimeoutException: Read timed out"
+      - -Dhttp.socketTimeout=60000
+      - -Dhttp.connectionTimeout=60000
+
+      - --stacktrace
+      - buildEnvironment
+      - build
+      - --info
+      - --scan
+      - -Dscan.tag.CLOUD_BUILT
+      - -Dscan.value.google_cloud_build_build_id=$BUILD_ID
+#      - -Dscan.value.google_cloud_build_machine_type=N1_HIGHCPU_32
+      - -Dscan.value.vcs_commit_sha=$COMMIT_SHA
+    dir: /workspace
+    # 30 mins == 1800 secs
+    # 60 mins == 3600 secs
+    timeout: 3600s
+
+# TODO: Save the build output, with the syntax below.
+#
+# artifacts:
+#   objects:
+#     location: 'gs://mybucket/'
+#     paths: ['my-package']
+
+images:
+  - gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9
+  # - gcr.io/$PROJECT_ID/kotlin-1.2.60-testbuild
+
+#options:
+#  machineType: 'N1_HIGHCPU_8'
+#  machineType: 'N1_HIGHCPU_32'
+# 30 mins == 1800 secs
+# 60 mins == 3600 secs
+# 65 mins == 3900 secs
+timeout: 3900s

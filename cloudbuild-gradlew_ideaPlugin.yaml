@@ -1,0 +1,223 @@
+---
+steps:
+
+#  - name: 'gcr.io/cloud-builders/docker'
+#    args:
+#      - pull
+#      - gcr.io/$PROJECT_ID/bunches
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - .
+      - -t
+      - gcr.io/$PROJECT_ID/bunches
+#      - --cache-from
+#      - gcr.io/$PROJECT_ID/bunches
+    dir: '/workspace/build-environment/bunches'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - gcr.io/$PROJECT_ID/bunches
+
+  - name: 'gcr.io/$PROJECT_ID/bunches'
+    args: ['switch', '.', '$_BUNCH']
+    dir: /workspace
+
+
+  - name: alpine
+    entrypoint: '/usr/bin/id'
+
+  - name: alpine
+    entrypoint: '/bin/ls'
+    args: ['-la']
+    dir: /workspace
+
+
+  - name: debian:stable-slim
+    args:
+      - chown
+      - '--from=root:root'
+      - '1000:1000'
+      - --recursive
+      - .
+      - /artifacts
+    dir: /workspace
+    volumes:
+      - name: artifacts
+        path: /artifacts
+
+  # - name: 'gcr.io/cloud-builders/docker'
+  #   args:
+  #     - build
+  #     - .
+  #     - -t
+  #     - gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9
+  #     - --cache-from
+  #     - gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9
+  #   dir: '/workspace/build-environment/gradle_w_zulu_jdk_6_7_8_9'
+
+  - name: 'gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9'
+    entrypoint: '/bin/ls'
+    args: ['-la']
+    dir: /workspace
+
+  - name: 'gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9'
+    entrypoint: '/usr/bin/env'
+    dir: /workspace
+
+  - name: 'gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9'
+    entrypoint: '/workspace/gradlew'
+    args:
+      # Avoid "org.gradle.api.GradleException: Error resolving plugin [id: 'org.gradle.kotlin.kotlin-dsl', version: '0.16.2']"
+      # caused by "java.net.SocketTimeoutException: Read timed out"
+      - -Dhttp.socketTimeout=60000
+      - -Dhttp.connectionTimeout=60000
+
+      - --stacktrace
+      - --info
+      - --scan
+      - -Dscan.tag.CLOUD_BUILT
+      - -Dscan.value.google_cloud_build_build_id=$BUILD_ID
+      - -Dscan.value.google_cloud_build_machine_type=N1_HIGHCPU_8
+      - -Dscan.value.vcs_commit_sha=$COMMIT_SHA
+      - buildEnvironment
+
+      - -PbuildNumber=$_BUILD_NUMBER
+      - -PdeployVersion=$_DEPLOY_VERSION
+      - writeVersions
+
+      - -PpluginVersion=$_PLUGIN_VERSION
+      - writePluginVersion
+
+      - ideaPlugin
+      - -PpluginZipPath=/artifacts/kotlin_idea_plugin-branch_$BRANCH_NAME-bunch_${_BUNCH}-build_id_$BUILD_ID.zip
+      - zipPlugin
+    dir: /workspace
+    volumes:
+      - name: artifacts
+        path: /artifacts
+    # 30 mins == 1800 secs
+    # 60 mins == 3600 secs
+    # Took ~15 mins on N1_HIGHCPU_32 [2018-08-18]
+    # Took >30 mins on default machine type [2018-09-01]
+    timeout: 1800s
+
+
+  - name: alpine
+    entrypoint: '/bin/ls'
+    args: ['-la']
+    dir: /workspace
+
+  - name: alpine
+    entrypoint: '/bin/ls'
+    args: ['-la']
+    dir: /workspace/dist
+
+  - name: alpine
+    entrypoint: '/bin/ls'
+    args: ['-la']
+    dir: /workspace/dist/artifacts
+
+  - name: alpine
+    entrypoint: '/bin/ls'
+    args: ['-la']
+    dir: /workspace/dist/artifacts/ideaPlugin
+
+  - name: alpine
+    entrypoint: '/bin/ls'
+    args: ['-la']
+    dir: /artifacts
+    volumes:
+      - name: artifacts
+        path: /artifacts
+
+  # Print the 'build' directories
+  - name: debian:stable-slim
+    args:
+    - find
+    - -regex
+    - '.*/\.\(git\|idea\)'
+    - -prune
+    - ','
+    - -iregex
+    - '.*/\(src\|build\|test/org\)'
+    - -prune
+    - ','
+    - -iname
+    - build
+    - -type
+    - d
+#    - -ls
+    - -exec
+    - '/usr/bin/du'
+    - --summarize
+    - '\{\}'
+    - '\;'
+    dir: /workspace
+#    volumes:
+#    - name: artifacts
+#      path: /artifacts
+# find -regex '.*/\.\(git\|idea\)' -prune , -iregex '.*/\(src\|build\|test/org\)' -prune , -iname 'build' -print0 | xargs -0 ls -l --recursive
+
+
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args:
+      # multithreaded
+      - -m
+      - cp
+      - -r
+      - .
+      - gs://calex-kotlin-cal_mod/branch_$BRANCH_NAME/bunch_${_BUNCH}
+      # - gs://calex-kotlin-cal_mod/branch_$BRANCH_NAME/google_cloud_build_id_$BUILD_ID
+    dir: /artifacts
+    volumes:
+      - name: artifacts
+        path: /artifacts
+
+  # WARNING: This WILL fail.
+  #          Many tests fail even on JetBrains's official TeamCity build-servers.
+  # TODO: Switch from Zulu JDK builds to Oracle JDK builds (at least for pre-JDK 11), to satisfy the expectations of some tests.
+  - name: 'gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9'
+    entrypoint: '/workspace/gradlew'
+    args:
+      - --stacktrace
+      - --info
+      - --scan
+      - -Dscan.tag.CLOUD_BUILT
+      - -Dscan.value.google_cloud_build_build_id=$BUILD_ID
+      - -Dscan.value.google_cloud_build_machine_type=N1_HIGHCPU_8
+      - -Dscan.value.vcs_commit_sha=$COMMIT_SHA
+      - buildEnvironment
+
+      - ideaPluginTest
+    dir: /workspace
+    # 30 mins == 1800 secs
+    # 60 mins == 3600 secs
+    timeout: 1800s
+
+# # TODO: Save the build output, with the syntax below.
+# #
+# artifacts:
+#   objects:
+#     location: 'gs://calex-kotlin-cal_mod/idea_plugin'
+#     paths: ['/workspace/dist/artifacts/ideaPlugin']
+
+images:
+  - gcr.io/$PROJECT_ID/bunches
+#  - gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9
+
+options:
+  machineType: 'N1_HIGHCPU_8'
+#  machineType: 'N1_HIGHCPU_32'
+# 30 mins == 1800 secs
+# 60 mins == 3600 secs
+# 65 mins == 3900 secs
+timeout: 3900s
+
+substitutions:
+  _BUILD_NUMBER: 1.2.61-release-89
+  _DEPLOY_VERSION: 1.2.61
+  _PLUGIN_VERSION: 1.2.61-release-IJ2018.2-1-calMod
+  _BUNCH: '182'

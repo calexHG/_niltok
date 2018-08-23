@@ -18,8 +18,10 @@ package org.jetbrains.kotlin.idea.decompiler.textBuilder
 
 import com.intellij.openapi.util.TextRange
 import org.jetbrains.kotlin.descriptors.*
+import org.jetbrains.kotlin.descriptors.annotations.AnnotationWithTarget
 import org.jetbrains.kotlin.idea.decompiler.navigation.ByDescriptorIndexer
 import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.renderer.DescriptorRenderer
 import org.jetbrains.kotlin.renderer.DescriptorRendererModifier
 import org.jetbrains.kotlin.renderer.DescriptorRendererOptions
@@ -48,7 +50,18 @@ fun buildDecompiledText(
         descriptorRenderer: DescriptorRenderer,
         indexers: Collection<DecompiledTextIndexer<*>> = listOf(ByDescriptorIndexer)
 ): DecompiledText {
-    val builder = StringBuilder()
+    val builder = object {
+        private val stringBuilder = StringBuilder()
+        val length get() = stringBuilder.length
+        fun appendPrerendered(string: String) = this.also { stringBuilder.append(string) }
+        // Run "find usages" on the overload directly below to scan for potential appends of not-appropriately-rendered text.
+        fun append(string: String) = this.also { stringBuilder.append(string) }
+        fun append(name: Name) = this.also { stringBuilder.append(descriptorRenderer.renderName(name)) }
+        fun append(fqName: FqName) = this.also { stringBuilder.append(descriptorRenderer.renderFqName(fqName.toUnsafe())) }
+        fun append(annotation: AnnotationWithTarget) =
+            this.also { stringBuilder.append(descriptorRenderer.renderAnnotation(annotation.annotation, annotation.target)) }
+        override fun toString(): String = stringBuilder.toString()
+    }
 
     fun appendDecompiledTextAndPackageName() {
         builder.append("// IntelliJ API Decompiler stub source generated from a class file\n" + "// Implementation of methods is not available")
@@ -67,15 +80,15 @@ fun buildDecompiledText(
     fun appendDescriptor(descriptor: DeclarationDescriptor, indent: String, lastEnumEntry: Boolean? = null) {
         val startOffset = builder.length
         if (isEnumEntry(descriptor)) {
-            for (annotation in descriptor.annotations) {
-                builder.append(descriptorRenderer.renderAnnotation(annotation))
+            for (annotation in descriptor.annotations.getAllAnnotations()) {
+                builder.append(annotation)
                 builder.append(" ")
             }
-            builder.append(descriptor.name.asString())
+            builder.append(descriptor.name)
             builder.append(if (lastEnumEntry!!) ";" else ",")
         }
         else {
-            builder.append(descriptorRenderer.render(descriptor).replace("= ...", DECOMPILED_COMMENT_FOR_PARAMETER))
+            builder.appendPrerendered(descriptorRenderer.render(descriptor).replace("= ...", DECOMPILED_COMMENT_FOR_PARAMETER))
         }
         var endOffset = builder.length
 

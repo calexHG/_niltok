@@ -26,10 +26,8 @@ import org.jetbrains.kotlin.kdoc.parser.KDocElementTypes
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.lexer.KtTokens.*
 import org.jetbrains.kotlin.psi.*
-import org.jetbrains.kotlin.psi.psiUtil.children
-import org.jetbrains.kotlin.psi.psiUtil.leaves
-import org.jetbrains.kotlin.psi.psiUtil.parents
-import org.jetbrains.kotlin.psi.psiUtil.siblings
+import org.jetbrains.kotlin.psi.psiUtil.*
+import org.jetbrains.kotlin.psi.stubs.elements.KtStubElementTypes
 
 private val QUALIFIED_OPERATION = TokenSet.create(DOT, SAFE_ACCESS)
 private val QUALIFIED_EXPRESSIONS = TokenSet.create(KtNodeTypes.DOT_QUALIFIED_EXPRESSION, KtNodeTypes.SAFE_ACCESS_EXPRESSION)
@@ -226,6 +224,31 @@ abstract class KotlinCommonBlock(
             }
         }
 
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        //
+        // TODO: Take code style settings into consideration
+        val DECLARATION_TYPES_W_TEXT_PRECEDING_NAME = TokenSet.create(KtNodeTypes.PROPERTY, KtNodeTypes.FUN, KtNodeTypes.CLASS,
+                                                                      KtNodeTypes.OBJECT_DECLARATION)
+        if (childParent?.elementType in DECLARATION_TYPES_W_TEXT_PRECEDING_NAME) {
+            val namedDeclarationParent = childParent.treeParent
+            val namedDeclarationParentType = namedDeclarationParent.elementType
+
+            if (namedDeclarationParentType === KtNodeTypes.CLASS_BODY ||
+                    namedDeclarationParentType === KtStubElementTypes.FILE ||
+                    namedDeclarationParentType === KtNodeTypes.BLOCK && namedDeclarationParent.treeParent == KtNodeTypes.SCRIPT)
+            {
+                val namedDeclarationPsi = childParent.psi as KtNamedDeclaration
+                val namedDeclarationNamePsi = namedDeclarationPsi.nameIdentifier
+
+                if (namedDeclarationNamePsi == null || child.startOffset <= namedDeclarationNamePsi.startOffset) {
+                    // This must come before the INDENT_RULES, or this special logic will get preempted by one of those more generic rules.
+                    return Indent.getNoneIndent()
+                }
+            }
+        }
+        //
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
         for (strategy in INDENT_RULES) {
             val indent = strategy.getIndent(child, settings)
             if (indent != null) {
@@ -355,8 +378,13 @@ abstract class KotlinCommonBlock(
             parentType in BINARY_EXPRESSIONS && getOperationType(node) in ALIGN_FOR_BINARY_OPERATIONS ->
                 createAlignmentStrategy(kotlinCommonSettings.ALIGN_MULTILINE_BINARY_OPERATION, getAlignment())
 
-            parentType === KtNodeTypes.SUPER_TYPE_LIST || parentType === KtNodeTypes.INITIALIZER_LIST ->
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            //
+            // CHANGELOG: Added TYPE_CONSTRAINT_LIST to the list.
+            parentType === KtNodeTypes.SUPER_TYPE_LIST || parentType === KtNodeTypes.INITIALIZER_LIST || parentType == KtNodeTypes.TYPE_CONSTRAINT_LIST ->
                 createAlignmentStrategy(kotlinCommonSettings.ALIGN_MULTILINE_EXTENDS_LIST, getAlignment())
+            //
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
             parentType === KtNodeTypes.PARENTHESIZED ->
                 object : CommonAlignmentStrategy() {
@@ -379,8 +407,15 @@ abstract class KotlinCommonBlock(
                     }
                 }
 
-            parentType == KtNodeTypes.TYPE_CONSTRAINT_LIST ->
-                createAlignmentStrategy(true, getAlignment())
+            // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+            //
+            // OBVIATED BY CUSTOM ADDITION
+            //   This JB addition duplicates the more proper addition we had made slightly above (where it's propery grouped with
+            //   the other ALIGN_MULTILINE_EXTENDS_LIST items).
+            //
+            // parentType == KtNodeTypes.TYPE_CONSTRAINT_LIST ->
+            //     createAlignmentStrategy(true, getAlignment())
+            // XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
             else ->
                 getNullAlignmentStrategy()
@@ -675,12 +710,14 @@ private val INDENT_RULES = arrayOf(
         .within(KtNodeTypes.THEN, KtNodeTypes.ELSE).notForType(KtNodeTypes.BLOCK)
         .set(Indent.getNormalIndent()),
 
+    // MAY NEED TO DISABLE THE FOLLOWING JETBRAINS-ADDED CODE ("Expression body") vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
     strategy("Expression body")
         .within(KtNodeTypes.FUN)
         .forElement {
             it.psi is KtExpression && it.psi !is KtBlockExpression
         }
         .continuationIf(KotlinCodeStyleSettings::CONTINUATION_INDENT_FOR_EXPRESSION_BODIES, indentFirst = true),
+    // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     strategy("If condition")
         .within(KtNodeTypes.CONDITION)
@@ -692,12 +729,14 @@ private val INDENT_RULES = arrayOf(
             Indent.getIndent(indentType, false, true)
         },
 
+    // MAY NEED TO DISABLE THE FOLLOWING JETBRAINS-ADDED CODE ("Property accessor expression body") vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
     strategy("Property accessor expression body")
         .within(KtNodeTypes.PROPERTY_ACCESSOR)
         .forElement {
             it.psi is KtExpression && it.psi !is KtBlockExpression
         }
         .set(Indent.getNormalIndent()),
+    // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     strategy("Property initializer")
         .within(KtNodeTypes.PROPERTY)
@@ -723,7 +762,12 @@ private val INDENT_RULES = arrayOf(
     strategy("Colon of delegation list")
         .within(KtNodeTypes.CLASS, KtNodeTypes.OBJECT_DECLARATION)
         .forType(KtTokens.COLON)
-        .set(Indent.getNormalIndent(false)),
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        //
+        // TODO: Take code style setting into account
+        .set(if(true) Indent.getNoneIndent() else Indent.getNormalIndent(false)),
+        //
+        ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     strategy("Delegation list")
         .within(KtNodeTypes.SUPER_TYPE_LIST, KtNodeTypes.INITIALIZER_LIST)
@@ -777,6 +821,8 @@ private val INDENT_RULES = arrayOf(
         )
         .set(Indent.getNormalIndent()),
 
+    // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+    // WILL LIKELY NEED TO DISABLE THE FOLLOWING JETBRAINS-ADDED CODE ("Parameter list" & "Where clause")
     strategy("Parameter list")
         .within(KtNodeTypes.VALUE_PARAMETER_LIST)
         .forElement { it.elementType == KtNodeTypes.VALUE_PARAMETER && it.psi.prevSibling != null }
@@ -786,6 +832,7 @@ private val INDENT_RULES = arrayOf(
         .within(KtNodeTypes.CLASS, KtNodeTypes.FUN, KtNodeTypes.PROPERTY)
         .forType(KtTokens.WHERE_KEYWORD)
         .set(Indent.getContinuationIndent()),
+    // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
     strategy("Array literals")
         .within(KtNodeTypes.COLLECTION_LITERAL_EXPRESSION)

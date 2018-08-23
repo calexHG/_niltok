@@ -22,6 +22,9 @@ import org.jetbrains.kotlin.KtNodeTypes.*
 import org.jetbrains.kotlin.idea.formatter.KotlinSpacingBuilder.CustomSpacingBuilder
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.lexer.KtTokens.*
+import org.jetbrains.kotlin.psi.KtClass
+import org.jetbrains.kotlin.psi.KtFunction
+import org.jetbrains.kotlin.psi.KtPropertyAccessor
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.isObjectLiteral
 import org.jetbrains.kotlin.psi.psiUtil.siblings
@@ -46,6 +49,10 @@ fun SpacingBuilder.RuleBuilder.spacesNoLineBreak(spaces: Int) =
 fun createSpacingBuilder(settings: CodeStyleSettings, builderUtil: KotlinSpacingBuilderUtil): KotlinSpacingBuilder {
     val kotlinCommonSettings = settings.kotlinCommonSettings
     val kotlinCustomSettings = settings.kotlinCustomSettings
+
+    val spaceCountInsideParenOfParamList = if(true) 1 else 0
+    val spaceCountInsideBracketOfTypeParamList = if(true) 0 else spaceCountInsideParenOfParamList
+
     return rules(kotlinCommonSettings, builderUtil) {
         val DECLARATIONS =
                 TokenSet.create(PROPERTY, FUN, CLASS, OBJECT_DECLARATION, ENUM_ENTRY, SECONDARY_CONSTRUCTOR, CLASS_INITIALIZER)
@@ -151,19 +158,25 @@ fun createSpacingBuilder(settings: CodeStyleSettings, builderUtil: KotlinSpacing
 
             inPosition(parent = VALUE_ARGUMENT_LIST, left = LPAR).customRule { parent, _, _ ->
                 if (kotlinCommonSettings.CALL_PARAMETERS_LPAREN_ON_NEXT_LINE && needWrapArgumentList(parent.node.psi)) {
-                    Spacing.createDependentLFSpacing(0, 0,
+                    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                    Spacing.createDependentLFSpacing(spaceCountInsideParenOfParamList, spaceCountInsideParenOfParamList,
+                    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
                                                      excludeLambdasAndObjects(parent),
                                                      commonCodeStyleSettings.KEEP_LINE_BREAKS,
                                                      commonCodeStyleSettings.KEEP_BLANK_LINES_IN_CODE)
                 }
                 else {
-                    createSpacing(0)
+                    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                    createSpacing(spaceCountInsideParenOfParamList)
+                    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
                 }
             }
 
             inPosition(parent = VALUE_ARGUMENT_LIST, right = RPAR).customRule { parent, left, _ ->
                 if (kotlinCommonSettings.CALL_PARAMETERS_RPAREN_ON_NEXT_LINE) {
-                    Spacing.createDependentLFSpacing(0, 0,
+                    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                    Spacing.createDependentLFSpacing(spaceCountInsideParenOfParamList, spaceCountInsideParenOfParamList,
+                    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
                                                      excludeLambdasAndObjects(parent),
                                                      commonCodeStyleSettings.KEEP_LINE_BREAKS,
                                                      commonCodeStyleSettings.KEEP_BLANK_LINES_IN_CODE)
@@ -171,7 +184,9 @@ fun createSpacingBuilder(settings: CodeStyleSettings, builderUtil: KotlinSpacing
                     // incomplete call being edited
                     createSpacing(1)
                 } else {
-                    createSpacing(0)
+                    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                    createSpacing(spaceCountInsideParenOfParamList)
+                    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
                 }
             }
 
@@ -229,8 +244,14 @@ fun createSpacingBuilder(settings: CodeStyleSettings, builderUtil: KotlinSpacing
 
 
             val spacesAroundAssignment = if (kotlinCommonSettings.SPACE_AROUND_ASSIGNMENT_OPERATORS) 1 else 0
-            beforeInside(EQ, PROPERTY).spacesNoLineBreak(spacesAroundAssignment)
-            beforeInside(EQ, FUN).spacing(spacesAroundAssignment, spacesAroundAssignment, 0, false, 0)
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // WE ALLOW LINE BREAKS BEFORE EQUALS TOKEN by replacing the commented-out code lines below.
+            //
+            // beforeInside(EQ, PROPERTY).spacesNoLineBreak(spacesAroundAssignment)
+            beforeInside(EQ, PROPERTY).spaces(spacesAroundAssignment, true)
+            // beforeInside(EQ, FUN).spacing(spacesAroundAssignment, spacesAroundAssignment, 0, false, 0)
+            beforeInside(EQ, FUN).spaces(spacesAroundAssignment, true)
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
             around(TokenSet.create(EQ, MULTEQ, DIVEQ, PLUSEQ, MINUSEQ, PERCEQ)).spaceIf(kotlinCommonSettings.SPACE_AROUND_ASSIGNMENT_OPERATORS)
             around(TokenSet.create(ANDAND, OROR)).spaceIf(kotlinCommonSettings.SPACE_AROUND_LOGICAL_OPERATORS)
@@ -300,30 +321,85 @@ fun createSpacingBuilder(settings: CodeStyleSettings, builderUtil: KotlinSpacing
 
             between(MODIFIERS_LIST_ENTRIES, MODIFIERS_LIST_ENTRIES).spaces(1)
 
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            //
+            between(LPAR, RPAR).spaces(0)
+
+            /** Applies the spacing rules that are appropriate for use just inside the parens that follow a parameterized keyword.
+                Used with `for ( ... )`, `if ( ... )`, `while ( ... )` and `when ( ... )` , but NOT `catch ( ... )`;
+               `catch ( ... )` uses applySpacingInsideParenOfParameterList instead. */
+            fun RuleBuilder.applySpacingInsideParenOfParameterizedKeyword(): SpacingBuilder {
+                // TODO: Take code style setting into consideration
+                return this.spaces(spaceCountInsideParenOfParamList)
+            }
+            // `CATCH` isn't included in the list of "parentheses-owning control structures" below because,
+            // rather than directly embedding parens within it, it instead uses a `VALUE_PARAMETER_LIST`.
+            for (parenthesesOwningControlStructure in arrayOf(FOR, IF, WHILE, DO_WHILE)) {
+                afterInside(LPAR, parenthesesOwningControlStructure).applySpacingInsideParenOfParameterizedKeyword()
+                beforeInside(RPAR, parenthesesOwningControlStructure).applySpacingInsideParenOfParameterizedKeyword()
+            }
+
+//            fun RuleBuilder.applySpacingInsideParenOfParameterList(): SpacingBuilder {
+//                // TODO: Take code style setting into consideration
+//                return if (true) this.spaces(1)
+//                else this.spaces(0)
+//            }
+//            afterInside(LPAR, VALUE_ARGUMENT_LIST).applySpacingInsideParenOfParameterList()
+//            beforeInside(RPAR, VALUE_ARGUMENT_LIST).applySpacingInsideParenOfParameterList()
+//            afterInside(LPAR, VALUE_PARAMETER_LIST).applySpacingInsideParenOfParameterList()
+//            beforeInside(RPAR, VALUE_PARAMETER_LIST).applySpacingInsideParenOfParameterList()
+            //
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
             after(LBRACKET).spaces(0)
             before(RBRACKET).spaces(0)
 
-            afterInside(LPAR, VALUE_PARAMETER_LIST).spaces(0, kotlinCommonSettings.METHOD_PARAMETERS_LPAREN_ON_NEXT_LINE)
-            beforeInside(RPAR, VALUE_PARAMETER_LIST).spaces(0, kotlinCommonSettings.METHOD_PARAMETERS_RPAREN_ON_NEXT_LINE)
-            afterInside(LT, TYPE_PARAMETER_LIST).spaces(0)
-            beforeInside(GT, TYPE_PARAMETER_LIST).spaces(0)
-            afterInside(LT, TYPE_ARGUMENT_LIST).spaces(0)
-            beforeInside(GT, TYPE_ARGUMENT_LIST).spaces(0)
+            afterInside(LPAR, VALUE_PARAMETER_LIST).spaces(spaceCountInsideParenOfParamList, kotlinCommonSettings.METHOD_PARAMETERS_LPAREN_ON_NEXT_LINE)
+            beforeInside(RPAR, VALUE_PARAMETER_LIST).spaces(spaceCountInsideParenOfParamList, kotlinCommonSettings.METHOD_PARAMETERS_RPAREN_ON_NEXT_LINE)
+            afterInside(LT, TYPE_PARAMETER_LIST).spaces(spaceCountInsideBracketOfTypeParamList)
+            beforeInside(GT, TYPE_PARAMETER_LIST).spaces(spaceCountInsideBracketOfTypeParamList)
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // JB MOVIED VALUE_ARGUMENT_LIST HANDLING ELSEWHERE
+            // afterInside(LPAR, VALUE_ARGUMENT_LIST).spaces(spaceCountInsideParenOfParamList, kotlinCommonSettings.CALL_PARAMETERS_LPAREN_ON_NEXT_LINE)
+            // beforeInside(RPAR, VALUE_ARGUMENT_LIST).spaces(spaceCountInsideParenOfParamList, kotlinCommonSettings.CALL_PARAMETERS_RPAREN_ON_NEXT_LINE)
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            afterInside(LT, TYPE_ARGUMENT_LIST).spaces(spaceCountInsideBracketOfTypeParamList)
+            beforeInside(GT, TYPE_ARGUMENT_LIST).spaces(spaceCountInsideBracketOfTypeParamList)
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // NOTE(corey): may need to loosen up this new JB rule. my style choice WRT it hasn't yet been finalized.
             before(TYPE_ARGUMENT_LIST).spaces(0)
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-            after(LPAR).spaces(0)
-            before(RPAR).spaces(0)
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // WE CHANGE THIS DEFAULT FROM 0 SPACES to 1 SPACE
+            after(LPAR).spaces(1)
+            before(RPAR).spaces(1)
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-            betweenInside(FOR_KEYWORD, LPAR, FOR).spaceIf(kotlinCommonSettings.SPACE_BEFORE_FOR_PARENTHESES)
-            betweenInside(IF_KEYWORD, LPAR, IF).spaceIf(kotlinCommonSettings.SPACE_BEFORE_IF_PARENTHESES)
-            betweenInside(WHILE_KEYWORD, LPAR, WHILE).spaceIf(kotlinCommonSettings.SPACE_BEFORE_WHILE_PARENTHESES)
-            betweenInside(WHILE_KEYWORD, LPAR, DO_WHILE).spaceIf(kotlinCommonSettings.SPACE_BEFORE_WHILE_PARENTHESES)
-            betweenInside(WHEN_KEYWORD, LPAR, WHEN).spaceIf(kotlinCustomSettings.SPACE_BEFORE_WHEN_PARENTHESES)
-            betweenInside(CATCH_KEYWORD, VALUE_PARAMETER_LIST, CATCH).spaceIf(kotlinCommonSettings.SPACE_BEFORE_CATCH_PARENTHESES)
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // OBSOLETED BY NEWER JB ADDITIONS
+            //   /** Applies the spacing rules that are appropriate for use in between a keyword and that keyword's subsequent opening paren.
+            //       Used with `for (`, `if (`, `while (`, `when (` and `catch (`. */
+            //   fun RuleBuilder.applySpacingBeforeParenOfParameterizedKeyword(): SpacingBuilder {
+            //       // TODO: Take code style setting into consideration
+            //       return if (true) this.spacing(0, 0, 0, false, 0)
+            //       else this.spacing(1, 1, 0, false, 0)
+            //   }
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            betweenInside(FOR_KEYWORD, LPAR, FOR).spaceIf(kotlinCommonSettings.SPACE_BEFORE_FOR_PARENTHESES)//.applySpacingBeforeParenOfParameterizedKeyword()//.spacing(1, 1, 0, false, 0)
+            betweenInside(IF_KEYWORD, LPAR, IF).spaceIf(kotlinCommonSettings.SPACE_BEFORE_IF_PARENTHESES)//.applySpacingBeforeParenOfParameterizedKeyword()//.spacing(1, 1, 0, false, 0)
+            betweenInside(WHILE_KEYWORD, LPAR, WHILE).spaceIf(kotlinCommonSettings.SPACE_BEFORE_WHILE_PARENTHESES)//.applySpacingBeforeParenOfParameterizedKeyword()//.spacing(1, 1, 0, false, 0)
+            betweenInside(WHILE_KEYWORD, LPAR, DO_WHILE).spaceIf(kotlinCommonSettings.SPACE_BEFORE_WHILE_PARENTHESES)//.applySpacingBeforeParenOfParameterizedKeyword()//.spacing(1, 1, 0, false, 0)
+            betweenInside(WHEN_KEYWORD, LPAR, WHEN).spaceIf(kotlinCustomSettings.SPACE_BEFORE_WHEN_PARENTHESES)//.applySpacingBeforeParenOfParameterizedKeyword()//.spacing(1, 1, 0, false, 0)
+            betweenInside(CATCH_KEYWORD, VALUE_PARAMETER_LIST, CATCH).spaceIf(kotlinCommonSettings.SPACE_BEFORE_CATCH_PARENTHESES)//.applySpacingBeforeParenOfParameterizedKeyword()//.spacing(1, 1, 0, false, 0)
 
-            betweenInside(LPAR, VALUE_PARAMETER, FOR).spaces(0)
-            betweenInside(LPAR, DESTRUCTURING_DECLARATION, FOR).spaces(0)
-            betweenInside(LOOP_RANGE, RPAR, FOR).spaces(0)
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// DEFENSIVELY COMMENTED OUT since it was dead code.
+// (it's preempted by blanket `after` and `before` rules `after(LPAR).spaces(0)` & `before(RPAR).spaces(0)` that are applied further above)
+//          betweenInside(LPAR, VALUE_PARAMETER, FOR).spaces(0)
+//          betweenInside(LPAR, DESTRUCTURING_DECLARATION, FOR).spaces(0)
+//          betweenInside(LOOP_RANGE, RPAR, FOR).spaces(0)
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
             after(LONG_TEMPLATE_ENTRY_START).spaces(0)
             before(LONG_TEMPLATE_ENTRY_END).spaces(0)
@@ -340,6 +416,24 @@ fun createSpacingBuilder(settings: CodeStyleSettings, builderUtil: KotlinSpacing
             beforeInside(COLON, TYPE_COLON_ELEMENTS) { spaceIf(kotlinCustomSettings.SPACE_BEFORE_TYPE_COLON) }
             afterInside(COLON, TYPE_COLON_ELEMENTS) { spaceIf(kotlinCustomSettings.SPACE_AFTER_TYPE_COLON) }
 
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            //
+            val CLASS_OR_OBJECT_DECLARATION = TokenSet.create(CLASS, OBJECT_DECLARATION)
+            afterInside(COLON, CLASS_OR_OBJECT_DECLARATION)
+                .spacing(
+                        if (kotlinCustomSettings.SPACE_AFTER_EXTEND_COLON) 1 else if (true) 1 else 0,
+                        if (true) (4 - ":".length) else 1,
+                        0,
+                        commonCodeStyleSettings.KEEP_LINE_BREAKS,
+                        commonCodeStyleSettings.KEEP_BLANK_LINES_IN_DECLARATIONS
+                )
+            //
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // JB moved this way way down below, away from its related rule, for some reason.
+            //   beforeInside(COLON, EXTEND_COLON_ELEMENTS) { spaceIf(kotlinSettings.SPACE_BEFORE_EXTEND_COLON) }
+            ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             afterInside(COLON, EXTEND_COLON_ELEMENTS) { spaceIf(kotlinCustomSettings.SPACE_AFTER_EXTEND_COLON) }
 
             beforeInside(ARROW, FUNCTION_LITERAL).spaceIf(kotlinCustomSettings.SPACE_BEFORE_LAMBDA_ARROW)
@@ -536,6 +630,7 @@ fun createSpacingBuilder(settings: CodeStyleSettings, builderUtil: KotlinSpacing
                                                  kotlinCommonSettings.KEEP_BLANK_LINES_IN_CODE)
             }
 
+            // Hmm..
             inPosition(parentSet = EXTEND_COLON_ELEMENTS, left = PRIMARY_CONSTRUCTOR, right = COLON).customRule { parent, left, _ ->
                 val primaryConstructor = left.node.psi as KtPrimaryConstructor
                 val rightParenthesis = primaryConstructor.valueParameterList?.rightParenthesis
@@ -563,6 +658,7 @@ fun createSpacingBuilder(settings: CodeStyleSettings, builderUtil: KotlinSpacing
             // if when entry has block, spacing after arrow should be set by lbrace rule
             aroundInside(ARROW, WHEN_ENTRY).spaceIf(kotlinCustomSettings.SPACE_AROUND_WHEN_ARROW)
 
+            // QUESTION(corey): Why is this all the way down here now?
             beforeInside(COLON, EXTEND_COLON_ELEMENTS) { spaceIf(kotlinCustomSettings.SPACE_BEFORE_EXTEND_COLON) }
 
             after(EOL_COMMENT).lineBreakInCode()

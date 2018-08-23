@@ -46,29 +46,22 @@ steps:
       - -Dhttp.connectionTimeout=60000
 
       - --stacktrace
-      - buildEnvironment
-      - build
       - --info
       - --scan
       - -Dscan.tag.CLOUD_BUILT
       - -Dscan.value.google_cloud_build_build_id=$BUILD_ID
 #      - -Dscan.value.google_cloud_build_machine_type=N1_HIGHCPU_32
       - -Dscan.value.vcs_commit_sha=$COMMIT_SHA
+      - buildEnvironment
+
+      - build
     dir: /workspace
     # 30 mins == 1800 secs
     # 60 mins == 3600 secs
     timeout: 3600s
 
-# TODO: Save the build output, with the syntax below.
-#
-# artifacts:
-#   objects:
-#     location: 'gs://mybucket/'
-#     paths: ['my-package']
-
 images:
   - gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9
-  # - gcr.io/$PROJECT_ID/kotlin-1.2.60-testbuild
 
 #options:
 #  machineType: 'N1_HIGHCPU_8'

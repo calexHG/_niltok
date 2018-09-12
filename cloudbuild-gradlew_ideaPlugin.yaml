@@ -63,6 +63,30 @@ steps:
     args: ['-la']
     dir: /workspace
 
+  # Print the 'build' directories
+  - name: debian:stable-slim
+    args:
+      - find
+      - -regex
+      - '.*/\.\(git\|idea\)'
+      - -prune
+      - ','
+      - -iregex
+      - '.*/\(src\|build\|test/org\)'
+      - -prune
+      - ','
+      - -iname
+      - build
+      - -type
+      - d
+#      - -ls
+      - -exec
+      - '/usr/bin/du'
+      - --summarize
+      - '{}'
+      - ';'
+    dir: /workspace
+
   - name: 'gcr.io/$PROJECT_ID/gradle_w_zulu_jdk_6_7_8_9'
     entrypoint: '/usr/bin/env'
     dir: /workspace
@@ -153,8 +177,8 @@ steps:
     - -exec
     - '/usr/bin/du'
     - --summarize
-    - '\{\}'
-    - '\;'
+    - '{}'
+    - ';'
     dir: /workspace
 #    volumes:
 #    - name: artifacts
